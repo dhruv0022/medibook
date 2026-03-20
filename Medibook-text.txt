@@ -1,0 +1,117 @@
+# 📁 PROJECT STRUCTURE
+```
+medibook/
+├── backend/
+│   ├── src/
+│   │   ├── config/
+│   │   │   ├── database.ts
+│   │   │   ├── env.ts
+│   │   │   ├── multer.ts
+│   │   │   └── stripe.ts
+│   │   ├── models/
+│   │   │   ├── User.ts
+│   │   │   ├── Appointment.ts
+│   │   │   ├── MedicalRecord.ts
+│   │   │   ├── Availability.ts
+│   │   │   ├── Clinic.ts
+│   │   │   └── Notification.ts
+│   │   ├── controllers/
+│   │   │   ├── authController.ts
+│   │   │   ├── appointmentController.ts
+│   │   │   ├── doctorController.ts
+│   │   │   ├── patientController.ts
+│   │   │   ├── medicalRecordController.ts
+│   │   │   ├── notificationController.ts
+│   │   │   └── adminController.ts
+│   │   ├── middleware/
+│   │   │   ├── auth.ts
+│   │   │   ├── authorize.ts
+│   │   │   ├── errorHandler.ts
+│   │   │   ├── validation.ts
+│   │   │   └── rateLimit.ts
+│   │   ├── routes/
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── appointment.routes.ts
+│   │   │   ├── doctor.routes.ts
+│   │   │   ├── patient.routes.ts
+│   │   │   ├── medicalRecord.routes.ts
+│   │   │   ├── notification.routes.ts
+│   │   │   └── admin.routes.ts
+│   │   ├── services/
+│   │   │   ├── emailService.ts
+│   │   │   ├── smsService.ts
+│   │   │   ├── paymentService.ts
+│   │   │   ├── uploadService.ts
+│   │   │   ├── videoService.ts
+│   │   │   └── notificationService.ts
+│   │   ├── utils/
+│   │   │   ├── jwt.ts
+│   │   │   ├── encryption.ts
+│   │   │   ├── logger.ts
+│   │   │   └── validators.ts
+│   │   ├── jobs/
+│   │   │   ├── reminderJobs.ts
+│   │   │   └── cleanupJobs.ts
+│   │   ├── types/
+│   │   │   └── index.ts
+│   │   └── server.ts
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── .env
+│
+├── frontend/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   │   ├── login/
+│   │   │   ├── register/
+│   │   │   ├── verify-email/
+│   │   │   └── forgot-password/
+│   │   ├── (patient)/
+│   │   │   ├── dashboard/
+│   │   │   ├── appointments/
+│   │   │   ├── doctors/
+│   │   │   ├── medical-records/
+│   │   │   └── profile/
+│   │   ├── (doctor)/
+│   │   │   ├── doctor-dashboard/
+│   │   │   ├── patients/
+│   │   │   ├── schedule/
+│   │   │   └── availability/
+│   │   ├── (admin)/
+│   │   │   ├── admin-dashboard/
+│   │   │   ├── doctors/
+│   │   │   ├── patients/
+│   │   │   ├── appointments/
+│   │   │   ├── analytics/
+│   │   │   └── settings/
+│   │   ├── video-consultation/
+│   │   ├── api/ (Next.js API routes)
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components/
+│   │   ├── ui/ (shadcn components)
+│   │   ├── common/
+│   │   ├── layout/
+│   │   ├── appointment/
+│   │   ├── doctor/
+│   │   ├── patient/
+│   │   └── admin/
+│   ├── lib/
+│   │   ├── api.ts
+│   │   ├── auth.ts
+│   │   ├── utils.ts
+│   │   └── validators.ts
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   ├── useAppointments.ts
+│   │   └── useNotifications.ts
+│   ├── store/
+│   │   └── authStore.ts
+│   ├── types/
+│   │   └── index.ts
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   └── next.config.js
+│
+└── README.md
