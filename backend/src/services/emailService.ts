@@ -1,4 +1,10 @@
+import sgMail from '@sendgrid/mail';
 import logger from '../utils/logger';
+
+// Initialize SendGrid
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 interface EmailOptions {
   to: string;
@@ -9,103 +15,146 @@ interface EmailOptions {
 
 class EmailService {
   /**
-   * Send email
-   * @param options - Email options
+   * Send email via SendGrid
    */
   async sendEmail(options: EmailOptions): Promise<boolean> {
     try {
-      // TODO: Integrate SendGrid later
-      // For now, just log the email
+      // In development, just log the email
       if (process.env.NODE_ENV === 'development') {
-        logger.info('📧 Email would be sent:', {
+        logger.info('📧 Email would be sent (DEV MODE):', {
           to: options.to,
           subject: options.subject,
         });
-        logger.debug('Email content:', options.html);
+        logger.debug('Email HTML:', options.html);
+        return true;
       }
 
-      // In production, use SendGrid:
-      // const sgMail = require('@sendgrid/mail');
-      // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-      // await sgMail.send({
-      //   to: options.to,
-      //   from: process.env.SENDGRID_FROM_EMAIL,
-      //   subject: options.subject,
-      //   html: options.html,
-      //   text: options.text,
-      // });
+      // In production, send via SendGrid
+      if (!process.env.SENDGRID_API_KEY) {
+        logger.error('SendGrid API key not configured');
+        return false;
+      }
 
+      const msg = {
+        to: options.to,
+        from: {
+          email: process.env.SENDGRID_FROM_EMAIL || 'noreply@medibook.com',
+          name: process.env.SENDGRID_FROM_NAME || 'MediBook',
+        },
+        subject: options.subject,
+        html: options.html,
+        text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+      };
+
+      await sgMail.send(msg);
+      logger.info(`Email sent successfully to ${options.to}`);
       return true;
-    } catch (error) {
-      logger.error('Error sending email:', error);
+    } catch (error: any) {
+      logger.error('Error sending email:', error.response?.body || error.message);
       return false;
     }
   }
 
-  /**
-   * Send verification email
-   */
-  async sendVerificationEmail(email: string, name: string, token: string): Promise<boolean> {
-    const verificationUrl = `${process.env.CLIENT_URL}/verify-email/${token}`;
-
+  async sendVerificationEmail(
+    email: string,
+    name: string,
+    verificationToken: string
+  ): Promise<boolean> {
+    const verificationUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
     const html = `
-      <!DOCTYPE html>
       <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-            .content { padding: 20px; background: #f9fafb; }
-            .button { 
-              display: inline-block; 
-              padding: 12px 24px; 
-              background: #2563eb; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 5px; 
-              margin: 20px 0;
-            }
-            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🏥 MediBook</h1>
-            </div>
-            <div class="content">
-              <h2>Welcome, ${name}! 👋</h2>
-              <p>Thank you for registering with MediBook. Please verify your email address to get started.</p>
-              <p>Click the button below to verify your email:</p>
-              <a href="${verificationUrl}" class="button">Verify Email</a>
-              <p>Or copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #2563eb;">${verificationUrl}</p>
-              <p><strong>This link expires in 24 hours.</strong></p>
-              <p>If you didn't create an account, you can safely ignore this email.</p>
-            </div>
-            <div class="footer">
-              <p>© 2024 MediBook. All rights reserved.</p>
-            </div>
-          </div>
+        <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+          <h2>Verify your MediBook account</h2>
+          <p>Hi ${name},</p>
+          <p>Thanks for signing up. Please verify your email address to activate your account.</p>
+          <p>
+            <a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
+              Verify Email
+            </a>
+          </p>
+          <p>If the button does not work, use this link:</p>
+          <p>${verificationUrl}</p>
         </body>
       </html>
     `;
 
     return this.sendEmail({
       to: email,
-      subject: 'Verify Your Email - MediBook',
+      subject: 'Verify your MediBook account',
       html,
-      text: `Welcome to MediBook! Please verify your email by visiting: ${verificationUrl}`,
+    });
+  }
+
+  async sendPasswordResetEmail(
+    email: string,
+    name: string,
+    resetToken: string
+  ): Promise<boolean> {
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+    const html = `
+      <html>
+        <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+          <h2>Reset your password</h2>
+          <p>Hi ${name},</p>
+          <p>We received a request to reset your MediBook password.</p>
+          <p>
+            <a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#dc2626;color:#fff;text-decoration:none;border-radius:6px;">
+              Reset Password
+            </a>
+          </p>
+          <p>This link will expire soon. If you did not request this, you can ignore this email.</p>
+          <p>${resetUrl}</p>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Reset your MediBook password',
+      html,
+    });
+  }
+
+  async sendWelcomeEmail(
+    email: string,
+    name: string,
+    role: string
+  ): Promise<boolean> {
+    const html = `
+      <html>
+        <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+          <h2>Welcome to MediBook</h2>
+          <p>Hi ${name},</p>
+          <p>Your email has been verified and your ${role} account is ready to use.</p>
+          <p>
+            <a href="${process.env.CLIENT_URL}" style="display:inline-block;padding:12px 20px;background:#059669;color:#fff;text-decoration:none;border-radius:6px;">
+              Open MediBook
+            </a>
+          </p>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Welcome to MediBook',
+      html,
     });
   }
 
   /**
-   * Send password reset email
+   * Send appointment reminder (24 hours before)
    */
-  async sendPasswordResetEmail(email: string, name: string, token: string): Promise<boolean> {
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${token}`;
-
+  async sendAppointmentReminder24h(
+    email: string,
+    name: string,
+    appointment: {
+      doctorName: string;
+      date: string;
+      time: string;
+      type: string;
+    }
+  ): Promise<boolean> {
     const html = `
       <!DOCTYPE html>
       <html>
@@ -113,41 +162,58 @@ class EmailService {
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-            .content { padding: 20px; background: #f9fafb; }
-            .button { 
-              display: inline-block; 
-              padding: 12px 24px; 
-              background: #2563eb; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 5px; 
-              margin: 20px 0;
-            }
-            .warning { background: #fef3c7; padding: 10px; border-left: 4px solid #f59e0b; }
-            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+            .header { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px; background: #f9fafb; border-radius: 0 0 10px 10px; }
+            .appointment-card { background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 20px 0; }
+            .detail-row { margin: 10px 0; }
+            .label { font-weight: bold; color: #4b5563; }
+            .value { color: #1f2937; }
+            .button { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>🏥 MediBook</h1>
+              <h1>🏥 Appointment Reminder</h1>
             </div>
             <div class="content">
-              <h2>Password Reset Request</h2>
               <p>Hi ${name},</p>
-              <p>You requested to reset your password. Click the button below to create a new password:</p>
-              <a href="${resetUrl}" class="button">Reset Password</a>
-              <p>Or copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #2563eb;">${resetUrl}</p>
-              <p><strong>This link expires in 1 hour.</strong></p>
-              <div class="warning">
-                <p><strong>⚠️ Security Notice:</strong></p>
-                <p>If you didn't request a password reset, please ignore this email or contact support if you have concerns.</p>
+              <p>This is a friendly reminder that you have an appointment coming up <strong>tomorrow</strong>.</p>
+              
+              <div class="appointment-card">
+                <h3 style="margin-top: 0; color: #2563eb;">Appointment Details</h3>
+                <div class="detail-row">
+                  <span class="label">Doctor:</span>
+                  <span class="value">${appointment.doctorName}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="label">Date:</span>
+                  <span class="value">${appointment.date}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="label">Time:</span>
+                  <span class="value">${appointment.time}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="label">Type:</span>
+                  <span class="value">${appointment.type}</span>
+                </div>
               </div>
+
+              <p><strong>Please arrive 10 minutes early</strong> to complete any necessary paperwork.</p>
+              
+              <p>If you need to cancel or reschedule, please do so at least 24 hours in advance.</p>
+              
+              <a href="${process.env.CLIENT_URL}/appointments" class="button">
+                View Appointment Details
+              </a>
             </div>
             <div class="footer">
               <p>© 2024 MediBook. All rights reserved.</p>
+              <p style="font-size: 12px; color: #9ca3af;">
+                This is an automated reminder. Please do not reply to this email.
+              </p>
             </div>
           </div>
         </body>
@@ -156,18 +222,23 @@ class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: 'Password Reset Request - MediBook',
+      subject: '⏰ Appointment Reminder - Tomorrow',
       html,
-      text: `You requested a password reset. Visit: ${resetUrl}`,
     });
   }
 
   /**
-   * Send welcome email (after verification)
+   * Send appointment reminder (1 hour before)
    */
-  async sendWelcomeEmail(email: string, name: string, role: string): Promise<boolean> {
-    const dashboardUrl = `${process.env.CLIENT_URL}/dashboard`;
-
+  async sendAppointmentReminder1h(
+    email: string,
+    name: string,
+    appointment: {
+      doctorName: string;
+      time: string;
+      location?: string;
+    }
+  ): Promise<boolean> {
     const html = `
       <!DOCTYPE html>
       <html>
@@ -175,50 +246,36 @@ class EmailService {
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-            .content { padding: 20px; background: #f9fafb; }
-            .button { 
-              display: inline-block; 
-              padding: 12px 24px; 
-              background: #2563eb; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 5px; 
-              margin: 20px 0;
-            }
-            .features { background: white; padding: 15px; border-radius: 5px; margin: 20px 0; }
-            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+            .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px; background: #fffbeb; border-radius: 0 0 10px 10px; }
+            .urgent-banner { background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
+            .button { display: inline-block; padding: 12px 24px; background: #f59e0b; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>🎉 Welcome to MediBook!</h1>
+              <h1>⚠️ Appointment in 1 Hour!</h1>
             </div>
             <div class="content">
-              <h2>You're all set, ${name}!</h2>
-              <p>Your ${role} account has been successfully verified and activated.</p>
-              <div class="features">
-                <h3>What you can do now:</h3>
-                <ul>
-                  ${role === 'patient' ? `
-                    <li>Browse and book appointments with doctors</li>
-                    <li>View your medical history</li>
-                    <li>Manage your health records</li>
-                    <li>Receive appointment reminders</li>
-                  ` : role === 'doctor' ? `
-                    <li>Manage your schedule and availability</li>
-                    <li>View patient appointments</li>
-                    <li>Update patient medical records</li>
-                    <li>Track your consultation history</li>
-                  ` : ''}
-                </ul>
+              <div class="urgent-banner">
+                <h2 style="margin: 0; color: #92400e;">Your appointment starts soon!</h2>
               </div>
-              <a href="${dashboardUrl}" class="button">Go to Dashboard</a>
-              <p>If you have any questions, feel free to contact our support team.</p>
-            </div>
-            <div class="footer">
-              <p>© 2024 MediBook. All rights reserved.</p>
+              
+              <p>Hi ${name},</p>
+              <p>Just a quick reminder that your appointment with <strong>${appointment.doctorName}</strong> is in <strong>1 hour</strong> at <strong>${appointment.time}</strong>.</p>
+              
+              ${
+                appointment.location
+                  ? `<p><strong>Location:</strong> ${appointment.location}</p>`
+                  : ''
+              }
+              
+              <p>Please make sure to arrive on time. We look forward to seeing you!</p>
+              
+              <a href="${process.env.CLIENT_URL}/appointments" class="button">
+                View Details
+              </a>
             </div>
           </div>
         </body>
@@ -227,7 +284,134 @@ class EmailService {
 
     return this.sendEmail({
       to: email,
-      subject: 'Welcome to MediBook! 🎉',
+      subject: '⏰ Appointment Starting Soon - In 1 Hour!',
+      html,
+    });
+  }
+
+  /**
+   * Send appointment confirmation
+   */
+  async sendAppointmentConfirmation(
+    email: string,
+    name: string,
+    appointment: {
+      doctorName: string;
+      date: string;
+      time: string;
+      type: string;
+      appointmentId: string;
+    }
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px; background: #f0fdf4; border-radius: 0 0 10px 10px; }
+            .appointment-card { background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Appointment Confirmed!</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${name},</p>
+              <p>Your appointment has been successfully booked!</p>
+              
+              <div class="appointment-card">
+                <h3 style="margin-top: 0; color: #10b981;">Appointment Details</h3>
+                <p><strong>Doctor:</strong> ${appointment.doctorName}</p>
+                <p><strong>Date:</strong> ${appointment.date}</p>
+                <p><strong>Time:</strong> ${appointment.time}</p>
+                <p><strong>Type:</strong> ${appointment.type}</p>
+                <p><strong>Confirmation #:</strong> ${appointment.appointmentId}</p>
+              </div>
+
+              <p>You will receive reminder notifications before your appointment.</p>
+              
+              <div style="text-align: center;">
+                <a href="${process.env.CLIENT_URL}/appointments/${appointment.appointmentId}" class="button">
+                  View Appointment
+                </a>
+                <a href="${process.env.CLIENT_URL}/appointments/${appointment.appointmentId}/cancel" class="button" style="background: #ef4444;">
+                  Cancel/Reschedule
+                </a>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: '✅ Appointment Confirmed - MediBook',
+      html,
+    });
+  }
+
+  /**
+   * Send appointment cancellation notice
+   */
+  async sendAppointmentCancellation(
+    email: string,
+    name: string,
+    appointment: {
+      doctorName: string;
+      date: string;
+      time: string;
+      reason?: string;
+    }
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px; background: #fef2f2; border-radius: 0 0 10px 10px; }
+            .button { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>❌ Appointment Cancelled</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${name},</p>
+              <p>Your appointment has been cancelled.</p>
+              
+              <p><strong>Cancelled Appointment:</strong></p>
+              <p>Doctor: ${appointment.doctorName}</p>
+              <p>Date: ${appointment.date}</p>
+              <p>Time: ${appointment.time}</p>
+              
+              ${appointment.reason ? `<p><strong>Reason:</strong> ${appointment.reason}</p>` : ''}
+              
+              <p>If you'd like to schedule a new appointment, please visit our booking page.</p>
+              
+              <a href="${process.env.CLIENT_URL}/doctors" class="button">
+                Book New Appointment
+              </a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: '❌ Appointment Cancelled - MediBook',
       html,
     });
   }

@@ -56,8 +56,16 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   
+  // Virtual properties
+  fullName: string;
+  
   // Instance methods
   comparePassword(candidatePassword: string): Promise<boolean>;
+  matchPassword(candidatePassword: string): Promise<boolean>;
+  getSignedJwtToken(): string;
+  generateEmailVerificationToken(): string;
+  generatePasswordResetToken(): string;
+  getPublicProfile(): any;
 }
 
 // User Schema
@@ -197,6 +205,88 @@ userSchema.methods.comparePassword = async function (
 ): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+// ==================== VIRTUAL PROPERTIES ====================
+
+userSchema.virtual('fullName').get(function (this: IUser) {
+  return `${this.firstName} ${this.lastName}`;
+});
+
+// Make virtuals visible in JSON
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
+
+// ==================== INSTANCE METHODS ====================
+
+// Method to compare passwords
+userSchema.methods.comparePassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Alias for comparePassword
+userSchema.methods.matchPassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
+  return this.comparePassword(candidatePassword);
+};
+
+// Method to generate JWT token
+userSchema.methods.getSignedJwtToken = function (): string {
+  const jwt = require('jsonwebtoken');
+  return jwt.sign(
+    { id: this._id, role: this.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+  );
+};
+
+// Method to generate email verification token
+userSchema.methods.generateEmailVerificationToken = function (): string {
+  const crypto = require('crypto');
+  const verificationToken = crypto.randomBytes(20).toString('hex');
+
+  this.verificationToken = crypto
+    .createHash('sha256')
+    .update(verificationToken)
+    .digest('hex');
+
+  this.verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  return verificationToken;
+};
+
+// Method to generate password reset token
+userSchema.methods.generatePasswordResetToken = function (): string {
+  const crypto = require('crypto');
+  const resetToken = crypto.randomBytes(20).toString('hex');
+
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  this.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000);
+
+  return resetToken;
+};
+
+// Method to get public profile
+userSchema.methods.getPublicProfile = function () {
+  const userObject = this.toObject();
+  
+  delete userObject.password;
+  delete userObject.verificationToken;
+  delete userObject.verificationTokenExpiry;
+  delete userObject.resetPasswordToken;
+  delete userObject.resetPasswordExpire;
+  delete userObject.__v;
+
+  return userObject;
+};
+
+// ==================== MODEL ====================
 
 const User = mongoose.model<IUser>('User', userSchema);
 

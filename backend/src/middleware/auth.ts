@@ -23,12 +23,16 @@ export const protect = async (
 
     try {
       // Verify token
-      const decoded = verifyToken(token);
+      const result = verifyToken(token);
+
+      if (!result.success) {
+        return next(new ErrorResponse(result.error || 'Not authorized to access this route', 401));
+      }
 
       // Attach user to request
       req.user = {
-        id: decoded.id,
-        role: decoded.role,
+        id: result.payload!.id,
+        role: result.payload!.role,
       };
 
       next();
